@@ -1,0 +1,32 @@
+name: trust-triage-env
+description: >
+  A risk-aware decision environment for uncertain incoming claims.
+  Agents must decide whether to ACCEPT, REJECT, VERIFY, DEFER, or ESCALATE
+  as evidence evolves over time.
+
+version: 0.1.0
+
+entrypoint:
+  module: app.server
+  app: app
+
+metadata:
+  domain: trust-and-safety
+  category: fact-triage
+  difficulty: easy-medium-hard
+
+tasks:
+  - id: easy_1
+    difficulty: easy
+    description: Obvious false viral claim
+  - id: medium_1
+    difficulty: medium
+    description: Breaking news under uncertainty
+  - id: hard_1
+    difficulty: hard
+    description: High-risk partially supported claim
+
+models:
+  observation: app.models.Observation
+  action: app.models.Action
+  reward: app.models.Reward
