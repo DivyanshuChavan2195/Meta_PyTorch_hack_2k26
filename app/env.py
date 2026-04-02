@@ -1,7 +1,25 @@
+import random
 from app.models import Observation, Action, StepResult, EnvState
 from app.tasks import TASKS
 from app.reward import compute_reward
 from app.graders import grade_episode
+
+
+# Action costs mapping
+ACTION_COSTS = {
+    "VERIFY": 1.0,
+    "DEFER": 0.5,
+    "ESCALATE": 2.0,
+    "ACCEPT": 0.2,
+    "REJECT": 0.2,
+}
+
+
+def add_noise(value: float, noise_range: float = 0.1) -> float:
+    """Add random noise to a value and clip to [0, 1]."""
+    noise = random.uniform(-noise_range, noise_range)
+    noisy_value = value + noise
+    return max(0.0, min(1.0, noisy_value))
 
 
 class TrustTriageEnv:
@@ -29,6 +47,8 @@ class TrustTriageEnv:
             history=[],
             done=False,
             last_action_error=False,
+            budget_remaining=3.0,
+            total_cost=0.0,
         )
 
         self.state_data = EnvState(
@@ -53,8 +73,15 @@ class TrustTriageEnv:
 
         obs.history.append(action.action)
 
-        # VERIFY changes the world state
+        # Get action cost
+        action_cost = ACTION_COSTS.get(action.action, 0.0)
+
+        # Apply noise if action is VERIFY
         if action.action == "VERIFY" and not self.verified:
+            obs.source_reliability = add_noise(obs.source_reliability)
+            obs.contradiction_score = add_noise(obs.contradiction_score)
+            obs.verifier_confidence = add_noise(obs.verifier_confidence)
+            
             update = self.task["verify_update"]
             obs.source_reliability = update["source_reliability"]
             obs.evidence_count = update["evidence_count"]
@@ -62,7 +89,14 @@ class TrustTriageEnv:
             obs.verifier_confidence = update["verifier_confidence"]
             self.verified = True
 
-        reward, reason = compute_reward(self.task, obs, action.action)
+        # Deduct cost from budget and track total cost
+        obs.budget_remaining -= action_cost
+        obs.total_cost += action_cost
+
+        reward, reason = compute_reward(self.task, obs, action.action, action_cost)
+
+        # Generate explanation
+        explanation = f"Action: {action.action} | Cost: {action_cost:.1f} | Budget remaining: {obs.budget_remaining:.1f} | {reason}"
 
         # Terminal actions
         if action.action in ["ACCEPT", "REJECT", "ESCALATE"]:
@@ -96,7 +130,8 @@ class TrustTriageEnv:
             info={
                 "reason": reason,
                 **info
-            }
+            },
+            explanation=explanation
         )
 
     def state(self):

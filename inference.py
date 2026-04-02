@@ -94,6 +94,7 @@ def run_task(task_id):
     obs = env.reset(task_id)
     done = False
     total_reward = 0.0
+    total_cost = 0.0
     final_score = 0.0
     steps = 0
 
@@ -107,6 +108,7 @@ def run_task(task_id):
         result = env.step(Action(action=action))
         obs = result.observation
         total_reward += result.reward
+        total_cost = obs.total_cost
         done = result.done
         final_score = result.info.get("final_score", 0.0)
 
@@ -118,6 +120,7 @@ def run_task(task_id):
         "task_id": task_id,
         "steps": steps,
         "total_reward": total_reward,
+        "total_cost": total_cost,
         "final_score": final_score
     }
 
@@ -133,6 +136,8 @@ def main():
 
     avg_score = sum(r["final_score"] for r in results) / len(results)
     avg_reward = sum(r["total_reward"] for r in results) / len(results)
+    avg_cost = sum(r["total_cost"] for r in results) / len(results)
+    avg_steps = sum(r["steps"] for r in results) / len(results)
 
     print("\n=== Final Results ===")
     for r in results:
@@ -140,11 +145,14 @@ def main():
             f"{r['task_id']}: "
             f"steps={r['steps']}, "
             f"reward={r['total_reward']:.2f}, "
+            f"cost={r['total_cost']:.2f}, "
             f"score={r['final_score']:.2f}"
         )
 
     print(f"\nAverage Final Score: {avg_score:.2f}")
     print(f"Average Reward: {avg_reward:.2f}")
+    print(f"Average Cost: {avg_cost:.2f}")
+    print(f"Average Steps: {avg_steps:.1f}")
 
 
 if __name__ == "__main__":

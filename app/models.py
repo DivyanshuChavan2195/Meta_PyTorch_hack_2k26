@@ -37,6 +37,8 @@ class Observation(BaseModel):
     history: List[str] = Field(default_factory=list)
     done: bool = False
     last_action_error: bool = False
+    budget_remaining: float = Field(default=3.0, ge=0.0)
+    total_cost: float = Field(default=0.0, ge=0.0)
 
 
 class Action(BaseModel):
@@ -53,6 +55,7 @@ class StepResult(BaseModel):
     reward: float
     done: bool
     info: Dict[str, Any]
+    explanation: str = ""
 
 
 class EnvState(BaseModel):

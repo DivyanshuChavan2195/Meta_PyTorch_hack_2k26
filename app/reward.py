@@ -1,4 +1,4 @@
-def compute_reward(task, observation, action: str):
+def compute_reward(task, observation, action: str, action_cost: float = 0.0):
     truth = task["ground_truth"]
     risk = observation.risk_level
 
@@ -52,4 +52,8 @@ def compute_reward(task, observation, action: str):
             reward = -1.5
             reason = "Rejected potentially true information."
 
-    return reward, reason
+    # Apply cost penalty (0.1 * action_cost)
+    cost_penalty = 0.1 * action_cost
+    final_reward = reward - cost_penalty
+
+    return final_reward, reason
