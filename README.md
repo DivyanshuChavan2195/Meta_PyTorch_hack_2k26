@@ -1,6 +1,5 @@
 # RL Based News Investigation (Trust Triage Env) - Enhanced Edition
 
----
 - title: Trust Triage Env
 - emoji: 🧠
 - colorFrom: blue
@@ -22,8 +21,6 @@ This document explains the **complete evolution of the TrustTriageEnv project**,
 The project demonstrates how **reinforcement learning environments can simulate real-world decision systems under uncertainty**.
 
 ---
-
-# Project Background
 
 TrustTriageEnv is a **Reinforcement Learning Style decision environment** designed to simulate how an automated trust & safety system processes incoming claims.
 
@@ -47,9 +44,11 @@ Through repeated interaction, an agent learns **Decision Strategies under Uncert
 
 <img width="1920" height="1080" alt="6" src="https://github.com/user-attachments/assets/47fedf0e-37df-4ddb-a57a-bac26fea7100" />
 
+
 <img width="1920" height="1080" alt="5" src="https://github.com/user-attachments/assets/ad33107a-2939-46cb-b2f7-a47811a717c2" />
 
-# Youtube Explaination Video
+
+# ✨Youtube Explaination Video (Please do watch)
 https://youtu.be/SNfxrL9Ex5E
 
 ---
@@ -76,17 +75,11 @@ These signals allowed agents to reason about the **credibility of incoming claim
 
 The goal of the agent was to choose actions that **maximize reward while correctly identifying claims**.
 
-While effective, the original system had limitations:
-
-• no resource constraints
-• no uncertainty modeling
-• limited dataset
-• minimal interpretability of decisions
 ---
 
-## ✨ New Features (Enhanced Edition)
+## ✨ New Enhanced Features
 
-### 1. **Cost-Aware Action System** 💰
+### 1. **Cost Aware Action System** 💰
 
 Each action has a **cost** that depletes from a limited budget:
 
@@ -98,24 +91,39 @@ Each action has a **cost** that depletes from a limited budget:
 | ACCEPT | 0.2 | Cheap quick accept |
 | REJECT | 0.2 | Cheap quick reject |
 
-**Budget**: Agents start with **3.0 credits** and must manage resource usage.
+Agents start with **3.0 investigation credits**.
 
-```python
-# Agent starts with budget = 3.0
-# After ESCALATE (cost 2.0): budget = 1.0
-# After VERIFY (cost 1.0): budget = 0.0
-```
+This forces the agent to balance:
+
+• accuracy of decisions  
+• cost of investigation  
+• efficiency of actions
+
+This converts the environment into a **resource optimization problem**, which is a core application of reinforcement learning.
 
 ---
 
 ### 2. **Noisy/Uncertain Signals** 📊
 
-When an agent chooses **VERIFY**, signals become **noisy** (±0.1 uncertainty):
+In real-world scenarios, verification data is rarely perfect.
 
-Affected signals:
-- `source_reliability`
-- `contradiction_score`
-- `verifier_confidence`
+The enhanced system introduces **uncertainty in signals**.
+
+When the agent chooses the VERIFY action, evidence signals receive random noise.
+
+Affected signals include:
+
+• source_reliability  
+• contradiction_score  
+• verifier_confidence  
+
+Noise simulates situations such as:
+
+• conflicting reports  
+• incomplete verification  
+• unreliable sources
+
+This requires agents to **make robust decisions under uncertainty**.
 
 ```python
 # Example:
@@ -132,9 +140,17 @@ Result: 0.78
 
 Rewards are penalized based on action cost:
 
-```
-Final Reward = Original Reward - (0.1 × Action Cost)
-```
+The reward system has been improved to penalize costly actions.
+
+The new reward formula is:
+
+Final Reward = Original Reward − (0.1 × Action Cost)
+
+This encourages agents to:
+
+• avoid unnecessary investigation  
+• prioritize efficient decisions  
+• balance accuracy with resource usage
 
 **Example:**
 ```
@@ -153,23 +169,29 @@ Final reward: +0.40
 
 ### 4. **Explanation Output** 📝
 
-Every step returns a detailed explanation:
+Each environment step now produces a **human-readable explanation** describing:
 
-```
-Action: ESCALATE | Cost: 2.0 | Budget remaining: 1.0 | Escalation appropriate for high-risk ambiguity.
-```
+• the action taken  
+• the cost incurred  
+• remaining investigation budget  
+• the reason for the reward outcomeEach environment step now produces a **human readable explanation** describing:
 
-Contains:
-- Action taken
-- Cost incurred
-- Budget remaining
-- Reason for reward
+• the action taken  
+• the cost incurred  
+• remaining investigation budget  
+• the reason for the reward outcome
+
+Example explanation:
+
+`Action: ESCALATE | Cost: 2.0 | Budget remaining: 1.0 | Escalation appropriate for high risk ambiguity.`
+
+This improves the **interpretability of agent decisions**.
 
 ---
 
 ### 5. **Expanded Dataset** 📚
 
-**15 benchmark tasks** (previously 3):
+**14 benchmark tasks** (previously only 3):
 
 **Easy (5 tasks):**
 - False claims: Asteroid impact, world ending, vaccine magnetism
@@ -204,8 +226,45 @@ hard_1: steps=1, reward=0.40, cost=2.00, score=1.00
 ```
 
 ---
+## Folder Structure:
 
-## 📦 Installation
+```
+trust-triage-env/
+├── app/
+│   ├── __init__.py
+│   ├── env.py                 # TrustTriageEnv class with reset(), step(), state()
+│   ├── models.py              # Reset, Step, State, Action, Reward models
+│   ├── server.py              # FastAPI endpoints
+│   ├── tasks.py               # Task definitions
+│   ├── reward.py              # Reward computation
+│   ├── graders.py             # Episode grading
+│   └── __pycache__/
+│
+├── server/
+│   ├── __init__.py
+│   ├── app.py                 # Uvicorn server runner
+│   └── __pycache__/
+│
+├── tests/
+│   ├── test_env.py            # Environment tests
+│   └── __pycache__/
+│
+├── app.py                     # Main entry point
+├── inference.py               # Baseline inference script
+├── openenv.yaml               # OpenEnv specification
+├── pyproject.toml             # Project metadata
+├── pytest.ini                 # Pytest configuration
+├── requirements.txt           # Python dependencies
+├── Dockerfile                 # Docker configuration
+├── .env.example               # Example environment variables
+├── README.md                  # Project documentation
+├── uv.lock                    # Dependency lock file
+├── .git/                      # Git repository
+└── venv/                      # Virtual environment
+```
+---
+
+## 📦 Installation Guide
 
 ### Requirements
 - Python >= 3.10
@@ -214,8 +273,13 @@ hard_1: steps=1, reward=0.40, cost=2.00, score=1.00
 ### Setup
 
 ```bash
-# Clone repository
+# Clone repository by Hugging Face
 git clone https://huggingface.co/spaces/sarthugg/trust-triage-env.git
+
+# OR use GitHub
+git clone https://github.com/DivyanshuChavan2195/Meta_PyTorch_hack_2k26.git
+
+# Get into the main folder:
 cd trust-triage-env
 
 # Create virtual environment
@@ -234,10 +298,10 @@ pip install -r requirements.txt
 ### Run Inference Script
 
 ```bash
-# Basic (heuristic policy)
+# Basic (CLI Based)
 python inference.py
 ```
-
+Output:
 <img width="1060" height="808" alt="score with new features" src="https://github.com/user-attachments/assets/c5d1d4d7-264e-4d1d-9dd2-b71eb7b9e5ba" />
 
 ### With OpenAI LLM
@@ -270,30 +334,6 @@ Access at: `http://localhost:7860/docs`
 - `POST /step` - Perform action
 - `GET /state` - Get current state
 - `GET /docs` - Swagger UI
-
----
-
-## 📊 Observation Space
-
-Each observation includes:
-
-```python
-{
-"claim_id": str,
-"claim_text": str,
-"source_reliability": float [0, 1],
-"evidence_count": int,
-"contradiction_score": float [0, 1],
-"verifier_confidence": float [0, 1],
-"risk_level": "low" | "medium" | "high",
-"time_step": int,
-"history": List[str],
-"done": bool,
-"last_action_error": bool,
-"budget_remaining": float, # NEW
-"total_cost": float # NEW
-}
-```
 
 ---
 
@@ -343,44 +383,6 @@ Final Metrics:
 
 ---
 
-## 🏗️ Project Structure
-
-```
-trust-triage-env/
-├── app/
-│ ├── __init__.py
-│ ├── env.py # Main environment (cost, noise, budget)
-│ ├── models.py # Pydantic models (observation, action, reward)
-│ ├── reward.py # Reward computation (with cost penalty)
-│ ├── graders.py # Episode grading logic
-│ ├── tasks.py # 15 benchmark tasks (expanded)
-│ ├── server.py # FastAPI endpoints
-│ └── ...
-├── server/
-│ └── app.py # Uvicorn entry point
-├── tests/
-│ └── test_env.py # Unit tests
-├── inference.py # Baseline inference script (with metrics)
-├── requirements.txt # Dependencies
-├── pyproject.toml # Project config
-├── Dockerfile # Docker build
-└── README.md # This file
-```
-
----
-
-## 🔍 Key Changes
-
-| Component | Change | Impact |
-|-----------|--------|--------|
-| `models.py` | Added `budget_remaining`, `total_cost`, `explanation` fields | Track resources and interpretability |
-| `env.py` | Added cost mapping, noise function, budget deduction | Cost-aware decision-making |
-| `reward.py` | Added cost penalty calculation | Incentivize efficiency |
-| `tasks.py` | Expanded from 3 → 15 tasks | Comprehensive benchmarking |
-| `inference.py` | Added cost & steps tracking | Better performance analysis |
-
----
-
 ## 📋 Specifications
 
 ### Cost Mapping
@@ -407,7 +409,7 @@ return max(0.0, min(1.0, noisy_value))
 - **Easy**: 5 tasks (obvious true/false claims)
 - **Medium**: 5 tasks (uncertain + false + true)
 - **Hard**: 4 tasks (high-risk uncertain claims)
-- **Total**: 15 benchmark tasks
+- **Total**: 14 benchmark tasks
 
 ---
 
@@ -449,28 +451,33 @@ git push github main
 
 ---
 
+# Hackathon Information
 
-## 📊 Performance Baseline
+This project was developed as part of the:
 
-Current heuristic baseline on 15 tasks:
+**Meta OpenEnv Hackathon**
 
-```
-Average Final Score: 0.96
-Average Reward: 0.72
-Average Cost: 1.11
-Average Steps: 1.1
+Organized by  
+**Scaler School of Technology**
 
-Easy tasks: 1.00 score (5/5 correct)
-Medium tasks: 0.96 score (4.8/5 correct)
-Hard tasks: 0.92 score (3.68/4 correct)
-```
+Sponsored by  
+
+• **Meta**  
+• **PyTorch**  
+• **Hugging Face**
 
 ---
 
-## 📝 License
+# Team
 
-This project is part of the Meta PyTorch Hackathon 2k26.
+This project was created by:
 
+**Team - Zero Day Trinity**
+
+---
+# Final Note
+
+TrustTriageEnv demonstrates how reinforcement learning environments can evolve from simple simulations into **realistic decision systems that model complex investigation workflows under uncertainty and cost constraints**.# Final Note
 ---
 
 **Happy Triaging!** 🚀
