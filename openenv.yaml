@@ -27,6 +27,8 @@ tasks:
     description: High-risk partially supported claim
 
 models:
-  observation: app.models.Observation
+  reset: app.models.Reset
+  step: app.models.Step
+  state: app.models.State
   action: app.models.Action
   reward: app.models.Reward

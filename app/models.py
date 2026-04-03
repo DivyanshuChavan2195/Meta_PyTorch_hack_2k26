@@ -3,7 +3,6 @@ from typing import List, Optional, Dict, Any, Literal
 from enum import Enum
 
 
-# ----------------------------
 # ENUMS
 # ----------------------------
 
@@ -21,11 +20,10 @@ class RiskLevel(str, Enum):
     high = "high"
 
 
-# ----------------------------
 # CORE MODELS
 # ----------------------------
 
-class Observation(BaseModel):
+class Reset(BaseModel):
     claim_id: str
     claim_text: str
     source_reliability: float = Field(..., ge=0.0, le=1.0)
@@ -41,6 +39,10 @@ class Observation(BaseModel):
     total_cost: float = Field(default=0.0, ge=0.0)
 
 
+# Alias for backward compatibility with inference.py
+Observation = Reset
+
+
 class Action(BaseModel):
     action: ActionType
 
@@ -50,18 +52,26 @@ class Reward(BaseModel):
     reason: str
 
 
-class StepResult(BaseModel):
-    observation: Observation
+class Step(BaseModel):
+    observation: Reset
     reward: float
     done: bool
     info: Dict[str, Any]
     explanation: str = ""
 
 
-class EnvState(BaseModel):
+# Alias for backward compatibility with inference.py
+StepResult = Step
+
+
+class State(BaseModel):
     task_id: str
     ground_truth: Literal["true", "false", "uncertain"]
-    current_observation: Observation
+    current_observation: Reset
     steps_taken: int
     max_steps: int
     final_action: Optional[ActionType] = None
+
+
+# Alias for backward compatibility with inference.py
+EnvState = State
