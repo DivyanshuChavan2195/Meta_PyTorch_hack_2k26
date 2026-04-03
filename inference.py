@@ -22,7 +22,6 @@ if USE_LLM:
         base_url=API_BASE_URL
     )
 
-
 SYSTEM_PROMPT = """
 You are an agent acting inside a fact-triage environment.
 
@@ -36,6 +35,23 @@ ESCALATE
 Choose the safest and most rational action based on the observation.
 Respond with only the action word.
 """.strip()
+
+
+def log_start(task: str, env_name: str, model: str):
+    print(f"[START] task={task} env={env_name} model={model}")
+
+
+def log_step(step: int, action: str, reward: float, done: bool, error: str | None):
+    reward_str = f"{reward:.2f}"
+    done_str = "true" if done else "false"
+    error_str = "null" if error is None else error.replace("\n", " ").strip()
+    print(f"[STEP] step={step} action={action} reward={reward_str} done={done_str} error={error_str}")
+
+
+def log_end(success: bool, steps: int, rewards: list[float]):
+    success_str = "true" if success else "false"
+    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    print(f"[END] success={success_str} steps={steps} rewards={rewards_str}")
 
 
 def heuristic_policy(obs):
@@ -52,11 +68,11 @@ def llm_policy(obs):
     prompt = f"""
 Claim: {obs.claim_text}
 Source reliability: {obs.source_reliability}
-Evidence count: {obs.evidence_count}
+Evidence count: {getattr(obs, 'evidence_count', 'unknown')}
 Contradiction score: {obs.contradiction_score}
 Verifier confidence: {obs.verifier_confidence}
 Risk level: {obs.risk_level}
-History: {obs.history}
+History: {getattr(obs, 'history', '')}
 
 What should the agent do next?
 """.strip()
@@ -78,8 +94,7 @@ What should the agent do next?
 
         return action
 
-    except Exception as e:
-        print(f"LLM call failed: {e}")
+    except Exception:
         return heuristic_policy(obs)
 
 
@@ -91,68 +106,75 @@ def choose_action(obs):
 
 def run_task(task_id):
     env = TrustTriageEnv()
-    obs = env.reset(task_id)
-    done = False
-    total_reward = 0.0
-    total_cost = 0.0
-    final_score = 0.0
+    rewards = []
     steps = 0
+    success = False
 
-    print(f"\n=== Running task: {task_id} ===")
+    try:
+        obs = env.reset(task_id)
+        log_start(task=task_id, env_name="trust_triage_env", model=MODEL_NAME)
 
-    while not done:
-        steps += 1
-        action = choose_action(obs)
-        print(f"Step {steps}: {action}")
+        done = False
+        while not done:
+            steps += 1
+            action = choose_action(obs)
 
-        result = env.step(Action(action=action))
-        obs = result.observation
-        total_reward += result.reward
-        total_cost = obs.total_cost
-        done = result.done
-        final_score = result.info.get("final_score", 0.0)
+            try:
+                result = env.step(Action(action=action))
+                obs = result.observation
+                reward = float(result.reward)
+                done = bool(result.done)
+                rewards.append(reward)
 
-        print(f"  Reward: {result.reward:+.2f}")
-        print(f"  Reason: {result.info.get('reason', '')}")
-        print(f"  Done: {done}")
+                log_step(
+                    step=steps,
+                    action=action,
+                    reward=reward,
+                    done=done,
+                    error=None
+                )
+
+            except Exception as step_exc:
+                log_step(
+                    step=steps,
+                    action=action,
+                    reward=0.0,
+                    done=True,
+                    error=str(step_exc)
+                )
+                done = True
+                return {
+                    "success": False,
+                    "steps": steps,
+                    "rewards": rewards,
+                }
+
+        success = True
+
+    except Exception as episode_exc:
+        if steps == 0:
+            # still emit step 0 if reset failed
+            log_step(step=0, action="NONE", reward=0.0, done=True, error=str(episode_exc))
+        success = False
+
+    finally:
+        try:
+            env.close()
+        except Exception:
+            pass
+
+        log_end(success=success, steps=steps, rewards=rewards)
 
     return {
-        "task_id": task_id,
+        "success": success,
         "steps": steps,
-        "total_reward": total_reward,
-        "total_cost": total_cost,
-        "final_score": final_score
+        "rewards": rewards,
     }
 
 
 def main():
-    print("=== TrustTriageEnv Baseline Inference ===")
-    print(f"Using model: {MODEL_NAME if USE_LLM else 'heuristic_baseline'}")
-
-    results = []
     for task_id in TASKS:
-        result = run_task(task_id)
-        results.append(result)
-
-    avg_score = sum(r["final_score"] for r in results) / len(results)
-    avg_reward = sum(r["total_reward"] for r in results) / len(results)
-    avg_cost = sum(r["total_cost"] for r in results) / len(results)
-    avg_steps = sum(r["steps"] for r in results) / len(results)
-
-    print("\n=== Final Results ===")
-    for r in results:
-        print(
-            f"{r['task_id']}: "
-            f"steps={r['steps']}, "
-            f"reward={r['total_reward']:.2f}, "
-            f"cost={r['total_cost']:.2f}, "
-            f"score={r['final_score']:.2f}"
-        )
-
-    print(f"\nAverage Final Score: {avg_score:.2f}")
-    print(f"Average Reward: {avg_reward:.2f}")
-    print(f"Average Cost: {avg_cost:.2f}")
-    print(f"Average Steps: {avg_steps:.1f}")
+        run_task(task_id)
 
 
 if __name__ == "__main__":
