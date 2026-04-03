@@ -1,14 +1,15 @@
+---
+title: Trust Triage Env
+emoji: 🧠
+colorFrom: blue
+colorTo: purple
+sdk: docker
+app_file: app.py
+app_port: 7860
+pinned: false
+---
+
 # RL Based News Investigation (Trust Triage Env) - Enhanced Edition
----
-- title: Trust Triage Env
-- emoji: 🧠
-- colorFrom: blue
-- colorTo: purple
-- sdk: docker
-- app_file: app.py
-- app_port: 7860
-- pinned: false
----
 
 # Trust Triage Env – Project Evolution & System Upgrade
 
