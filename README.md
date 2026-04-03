@@ -9,8 +9,6 @@ app_port: 7860
 pinned: false
 ---
 
-# RL Based News Investigation (Trust Triage Env) - Enhanced Edition
-
 # Trust Triage Env – Project Evolution & System Upgrade
 
 This document explains the **complete evolution of the TrustTriageEnv project**, including:
@@ -303,7 +301,7 @@ pip install -r requirements.txt
 python inference.py
 ```
 Output:
-<img width="1060" height="808" alt="score with new features" src="https://github.com/user-attachments/assets/c5d1d4d7-264e-4d1d-9dd2-b71eb7b9e5ba" />
+<img width="1640" height="1094" alt="final with model" src="https://github.com/user-attachments/assets/faaad669-e0cb-447f-af85-f8a5cc7b16d5" />
 
 ### With OpenAI LLM
 
