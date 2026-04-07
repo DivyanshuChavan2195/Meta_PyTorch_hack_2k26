@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+import uvicorn
 
 app = FastAPI()
 
@@ -22,6 +23,10 @@ def step(action: dict):
         "info": {}
     }
 
-if __name__ == "__main__":
-    import uvicorn
+# ✅ REQUIRED main function
+def main():
     uvicorn.run(app, host="0.0.0.0", port=7860)
+
+# ✅ REQUIRED for validator
+if __name__ == "__main__":
+    main()
