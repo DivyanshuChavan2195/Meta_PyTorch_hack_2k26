@@ -323,6 +323,10 @@ python inference.py
 
 ```bash
 uvicorn app.server:app --reload
+
+OR
+
+python app.py
 ```
 
 Access at: `http://localhost:7860/docs`

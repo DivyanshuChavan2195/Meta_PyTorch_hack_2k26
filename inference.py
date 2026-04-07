@@ -8,19 +8,14 @@ from app.tasks import TASKS
 
 load_dotenv()
 
-API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4.1-mini")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-HF_TOKEN = os.getenv("HF_TOKEN", "")
+API_BASE_URL = os.environ["API_BASE_URL"]
+API_KEY = os.environ["API_KEY"]
+MODEL_NAME = os.environ["MODEL_NAME"]
 
-USE_LLM = bool(OPENAI_API_KEY)
-
-client = None
-if USE_LLM:
-    client = OpenAI(
-        api_key=OPENAI_API_KEY,
-        base_url=API_BASE_URL
-    )
+client = OpenAI(
+    base_url=API_BASE_URL,
+    api_key=API_KEY
+)
 
 SYSTEM_PROMPT = """
 You are an agent acting inside a fact-triage environment.
@@ -99,9 +94,7 @@ What should the agent do next?
 
 
 def choose_action(obs):
-    if USE_LLM:
-        return llm_policy(obs)
-    return heuristic_policy(obs)
+    return llm_policy(obs)
 
 
 def run_task(task_id):
