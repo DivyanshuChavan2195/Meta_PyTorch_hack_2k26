@@ -1,173 +1,203 @@
 import os
-from dotenv import load_dotenv
+import json
+import time
+import requests
 from openai import OpenAI
 
-from app.env import TrustTriageEnv
-from app.models import Action
-from app.tasks import TASKS
 
-load_dotenv()
+# =========================
+# ENV CONFIG
+# =========================
 
-API_BASE_URL = os.environ["API_BASE_URL"]
-API_KEY = os.environ["API_KEY"]
-MODEL_NAME = os.environ["MODEL_NAME"]
+API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
+HF_TOKEN = os.getenv("HF_TOKEN", "")
 
-client = OpenAI(
-    base_url=API_BASE_URL,
-    api_key=API_KEY
-)
-
-SYSTEM_PROMPT = """
-You are an agent acting inside a fact-triage environment.
-
-You must choose exactly one action from:
-ACCEPT
-REJECT
-VERIFY
-DEFER
-ESCALATE
-
-Choose the safest and most rational action based on the observation.
-Respond with only the action word.
-""".strip()
+# Your deployed environment URL
+ENV_BASE_URL = "https://sarthugg-trust-triage-env.hf.space"
 
 
-def log_start(task: str, env_name: str, model: str):
-    print(f"[START] task={task} env={env_name} model={model}")
+# =========================
+# OPENAI CLIENT (SAFE)
+# =========================
+
+client = None
+if HF_TOKEN:
+    try:
+        client = OpenAI(
+            api_key=HF_TOKEN,
+            base_url=API_BASE_URL
+        )
+    except Exception as e:
+        print(f"[WARN] Failed to initialize OpenAI client: {e}")
+        client = None
 
 
-def log_step(step: int, action: str, reward: float, done: bool, error: str | None):
-    reward_str = f"{reward:.2f}"
-    done_str = "true" if done else "false"
-    error_str = "null" if error is None else error.replace("\n", " ").strip()
-    print(f"[STEP] step={step} action={action} reward={reward_str} done={done_str} error={error_str}")
+# =========================
+# TASKS
+# =========================
+
+TASKS = ["easy_1", "medium_1", "hard_1"]
 
 
-def log_end(success: bool, steps: int, rewards: list[float]):
-    success_str = "true" if success else "false"
-    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
-    print(f"[END] success={success_str} steps={steps} rewards={rewards_str}")
-
+# =========================
+# HEURISTIC FALLBACK POLICY
+# =========================
 
 def heuristic_policy(obs):
-    if obs.contradiction_score > 0.7:
-        return "REJECT"
-    if obs.verifier_confidence > 0.75:
-        return "ACCEPT"
-    if obs.risk_level == "high" and 0.3 <= obs.verifier_confidence <= 0.7:
-        return "ESCALATE"
-    return "VERIFY"
+    contradiction = obs.get("contradiction_score", 0.0)
+    verifier = obs.get("verifier_confidence", 0.0)
+    source = obs.get("source_reliability", 0.0)
+    risk = obs.get("risk_level", "medium")
+    step = obs.get("time_step", 0)
 
+    if step == 0:
+        if risk == "high" and verifier < 0.4:
+            return "VERIFY"
+        if contradiction > 0.7:
+            return "REJECT"
+        if verifier > 0.8 and source > 0.7:
+            return "ACCEPT"
+        return "VERIFY"
+
+    if contradiction > 0.8:
+        return "REJECT"
+    if verifier > 0.85 and source > 0.7:
+        return "ACCEPT"
+    if risk == "high":
+        return "ESCALATE"
+
+    return "DEFER"
+
+
+# =========================
+# LLM POLICY (OPTIONAL)
+# =========================
 
 def llm_policy(obs):
-    prompt = f"""
-Claim: {obs.claim_text}
-Source reliability: {obs.source_reliability}
-Evidence count: {getattr(obs, 'evidence_count', 'unknown')}
-Contradiction score: {obs.contradiction_score}
-Verifier confidence: {obs.verifier_confidence}
-Risk level: {obs.risk_level}
-History: {getattr(obs, 'history', '')}
+    if client is None:
+        return heuristic_policy(obs)
 
-What should the agent do next?
-""".strip()
+    prompt = f"""
+You are a trust and safety decision agent.
+
+Given the observation below, choose exactly one action from:
+ACCEPT, REJECT, VERIFY, DEFER, ESCALATE
+
+Observation:
+{json.dumps(obs, indent=2)}
+
+Return only the action name.
+"""
 
     try:
         response = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": "You are a careful trust and safety evaluator."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0,
-            max_tokens=10
+            temperature=0.0
         )
-        action = (response.choices[0].message.content or "").strip().upper()
 
-        if action not in ["ACCEPT", "REJECT", "VERIFY", "DEFER", "ESCALATE"]:
-            return heuristic_policy(obs)
+        action = response.choices[0].message.content.strip().upper()
 
-        return action
+        allowed = {"ACCEPT", "REJECT", "VERIFY", "DEFER", "ESCALATE"}
+        if action in allowed:
+            return action
 
-    except Exception:
+        return heuristic_policy(obs)
+
+    except Exception as e:
+        print(f"[WARN] LLM call failed, falling back to heuristic: {e}")
         return heuristic_policy(obs)
 
 
-def choose_action(obs):
-    return llm_policy(obs)
+# =========================
+# API HELPERS
+# =========================
 
+def reset_env(task_id):
+    response = requests.post(f"{ENV_BASE_URL}/reset", params={"task_id": task_id}, timeout=30)
+    response.raise_for_status()
+    return response.json()
+
+
+def step_env(action):
+    response = requests.post(
+        f"{ENV_BASE_URL}/step",
+        json={"action": action},
+        timeout=30
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+# =========================
+# MAIN EVAL LOOP
+# =========================
 
 def run_task(task_id):
-    env = TrustTriageEnv()
-    rewards = []
-    steps = 0
-    success = False
+    print(f"\n[START] Task: {task_id}")
 
-    try:
-        obs = env.reset(task_id)
-        log_start(task=task_id, env_name="trust_triage_env", model=MODEL_NAME)
+    obs = reset_env(task_id)
+    total_reward = 0.0
+    done = False
+    step_num = 0
 
-        done = False
-        while not done:
-            steps += 1
-            action = choose_action(obs)
+    while not done and step_num < 5:
+        action = llm_policy(obs)
 
-            try:
-                result = env.step(Action(action=action))
-                obs = result.observation
-                reward = float(result.reward)
-                done = bool(result.done)
-                rewards.append(reward)
+        print(f"[STEP] {step_num + 1}")
+        print(f"Action: {action}")
+        print(f"Observation: {json.dumps(obs)}")
 
-                log_step(
-                    step=steps,
-                    action=action,
-                    reward=reward,
-                    done=done,
-                    error=None
-                )
+        result = step_env(action)
 
-            except Exception as step_exc:
-                log_step(
-                    step=steps,
-                    action=action,
-                    reward=0.0,
-                    done=True,
-                    error=str(step_exc)
-                )
-                done = True
-                return {
-                    "success": False,
-                    "steps": steps,
-                    "rewards": rewards,
-                }
+        obs = result["observation"]
+        reward = result["reward"]
+        done = result["done"]
+        info = result.get("info", {})
 
-        success = True
+        total_reward += reward
+        step_num += 1
 
-    except Exception as episode_exc:
-        if steps == 0:
-            # still emit step 0 if reset failed
-            log_step(step=0, action="NONE", reward=0.0, done=True, error=str(episode_exc))
-        success = False
+        print(f"Reward: {reward}")
+        print(f"Done: {done}")
+        print(f"Info: {json.dumps(info)}")
 
-    finally:
-        try:
-            env.close()
-        except Exception:
-            pass
+        time.sleep(0.5)
 
-        log_end(success=success, steps=steps, rewards=rewards)
+    avg_score = max(0.0, min(1.0, total_reward / max(step_num, 1)))
+
+    print(f"[END] Task: {task_id}")
+    print(f"Total Reward: {total_reward}")
+    print(f"Score: {avg_score:.3f}")
 
     return {
-        "success": success,
-        "steps": steps,
-        "rewards": rewards,
+        "task_id": task_id,
+        "total_reward": total_reward,
+        "score": avg_score
     }
 
 
 def main():
+    all_results = []
+
     for task_id in TASKS:
-        run_task(task_id)
+        try:
+            result = run_task(task_id)
+            all_results.append(result)
+        except Exception as e:
+            print(f"[ERROR] Task {task_id} failed: {e}")
+            all_results.append({
+                "task_id": task_id,
+                "total_reward": 0.0,
+                "score": 0.0
+            })
+
+    print("\n===== FINAL RESULTS =====")
+    print(json.dumps(all_results, indent=2))
 
 
 if __name__ == "__main__":
